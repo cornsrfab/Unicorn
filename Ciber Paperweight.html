@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>CYBER GUIDESTRIP</title>
+  <style>
+    :root {
+      --bg-color: #000000;
+      --canvas-bg: #2222e7;
+      --text-color: white;
+    }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: linear-gradient(to bottom, #ffffff, #c9caff);
+      font-family: serif;
+      color: rgb(26, 3, 107);
+      overflow: hidden;
+      transition: background 0.3s;
+    }
+
+    body.dark-mode {
+      background: var(--bg-color);
+      color: var(--text-color);
+    }
+
+    h1 {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 3em;
+      color: rgb(39, 50, 255);
+      letter-spacing: 2px;
+    }
+
+    .container {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      z-index: 50;
+    }
+
+    .drop-area {
+      width: 100px;
+      height: 150px;
+      border: 2px dashed #007bff;
+      background: rgb(255, 255, 255);
+      color: rgb(181, 27, 27);
+      font-size: 1.5em;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      border-radius: 10px;
+      margin: 20px auto;
+      transition: 0.3s ease;
+      user-select: none;
+    }
+
+    .drop-area.dragover {
+      border-color: #00f;
+      background: #eee;
+    }
+
+    .pdf-container {
+      position: absolute;
+      top: 100px;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: var(--bg-color);
+    }
+
+    canvas {
+      margin: 10px 0;
+      background: var(--canvas-bg);
+      box-shadow: 0 0 5px rgba(162, 41, 41, 0.4);
+      transition: filter 0.3s;
+    }
+
+    body.dark-mode canvas {
+      filter: invert(100%) hue-rotate(180deg);
+    }
+
+    .close-btn {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: transparent;
+      color: indigo;
+      border: none;
+      font-size: 1.5em;
+      cursor: pointer;
+      display: none;
+      z-index: 20;
+    }
+
+    .toggle-mode {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: transparent;
+      color: inherit;
+      border: none;
+      font-family: 'Times', serif;
+      font-size: 1em;
+      text-decoration: underline;
+      cursor: pointer;
+      z-index: 20;
+    }
+
+    .guidestrip {
+      position: absolute;
+      left: 0;
+      width: 100%;
+      pointer-events: none;
+      backdrop-filter: brightness(120%) contrast(110%);
+      display: none;
+      z-index: 40;
+    }
+
+    .guidestrip.active {
+      display: block;
+    }
+
+    .guidestrip-controls {
+      position: absolute;
+      top: 180px;
+      left: 20px;
+      z-index: 22;
+      color: rgb(129, 173, 255);
+    }
+
+    .guidestrip-controls label {
+      font-size: 0.9em;
+      font-family: Times;
+      text-decoration: underline;
+      display: block;
+      margin: 5px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>CYBER GUIDESTRIP</h1>
+
+  <button class="close-btn" id="closeBtn">✕</button>
+  <button class="toggle-mode" id="modeToggle">Dark Mode</button>
+
+  <div class="guidestrip-controls">
+    <label>Height
+      <input type="range" id="stripHeight" min="20" max="200" value="50">
+    </label>
+    <label>Opacity
+      <input type="range" id="stripOpacity" min="0.1" max="1" step="0.1" value="0.4">
+    </label>
+    <label>Color
+      <input type="color" id="stripColor" value="#aad4ff">
+    </label>
+  </div>
+
+  <div class="container" id="dropContainer">
+    <div class="drop-area" id="dropArea">drop</div>
+  </div>
+
+  <div class="pdf-container" id="pdfContainer"></div>
+  <div class="guidestrip" id="guideStrip"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+  <script>
+    const dropArea = document.getElementById('dropArea');
+    const dropContainer = document.getElementById('dropContainer');
+    const pdfContainer = document.getElementById('pdfContainer');
+    const closeBtn = document.getElementById('closeBtn');
+    const modeToggle = document.getElementById('modeToggle');
+    const guideStrip = document.getElementById('guideStrip');
+    const stripHeight = document.getElementById('stripHeight');
+    const stripOpacity = document.getElementById('stripOpacity');
+    const stripColor = document.getElementById('stripColor');
+    let darkMode = false;
+    let guideActive = false;
+
+    function resetViewer() {
+      pdfContainer.innerHTML = '';
+      closeBtn.style.display = 'none';
+      dropContainer.style.display = 'block';
+      guideStrip.style.display = 'none';
+      guideActive = false;
+    }
+
+    closeBtn.addEventListener('click', resetViewer);
+
+    modeToggle.addEventListener('click', () => {
+      darkMode = !darkMode;
+      document.body.classList.toggle('dark-mode', darkMode);
+      modeToggle.textContent = darkMode ? 'Light Mode' : 'Dark Mode';
+    });
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropArea.addEventListener(eventName, e => {
+        e.preventDefault();
+        dropArea.classList.add('dragover');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropArea.addEventListener(eventName, e => {
+        e.preventDefault();
+        dropArea.classList.remove('dragover');
+      });
+    });
+
+    dropArea.addEventListener('drop', async e => {
+      const file = e.dataTransfer.files[0];
+      if (!file || file.type !== 'application/pdf') {
+        alert("PDF 파일만 업로드 가능합니다.");
+        return;
+      }
+
+      dropContainer.style.display = 'none';
+      closeBtn.style.display = 'block';
+
+      const fileReader = new FileReader();
+      fileReader.onload = async function () {
+        const typedarray = new Uint8Array(this.result);
+        const pdf = await pdfjsLib.getDocument({ data: typedarray }).promise;
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale: 1.5 });
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+
+          await page.render({ canvasContext: context, viewport: viewport }).promise;
+          pdfContainer.appendChild(canvas);
+        }
+      };
+      fileReader.readAsArrayBuffer(file);
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        guideActive = !guideActive;
+        guideStrip.classList.toggle('active', guideActive);
+      }
+    });
+
+    document.addEventListener('mousemove', e => {
+      if (!guideActive) return;
+      const height = parseInt(stripHeight.value);
+      guideStrip.style.top = `${e.clientY - height / 2}px`;
+      guideStrip.style.height = `${height}px`;
+      guideStrip.style.background = stripColor.value;
+      guideStrip.style.opacity = stripOpacity.value;
+    });
+  </script>
+</body>
+</html>
