@@ -12,9 +12,9 @@
     html, body {
       margin: 0;
       height: 100%;
-      background: linear-gradient(to bottom, #ffffff, #c9caff);
+      background: linear-gradient(to bottom, #ffffff, #3d57ff);
       font-family: serif;
-      color: rgb(26, 3, 107);
+      color: rgb(12, 0, 82);
       overflow: hidden;
       transition: background 0.3s;
     }
@@ -26,9 +26,9 @@
 
     h1 {
       text-align: center;
-      margin-top: 20px;
+      margin-top: 40px;
       font-size: 3em;
-      color: rgb(39, 50, 255);
+      color: rgb(29, 48, 255);
       letter-spacing: 2px;
     }
 
@@ -38,12 +38,12 @@
       left: 50%;
       transform: translate(-50%, -50%);
       text-align: center;
-      z-index: 50;
+      z-index: 10;
     }
 
     .drop-area {
       width: 100px;
-      height: 150px;
+      height: 100px;
       border: 2px dashed #007bff;
       background: rgb(255, 255, 255);
       color: rgb(181, 27, 27);
@@ -114,29 +114,24 @@
       z-index: 20;
     }
 
-    .guidestrip {
+    .magnifier {
       position: absolute;
-      left: 0;
-      width: 100%;
+      border-radius: 50%;
+      overflow: hidden;
       pointer-events: none;
-      backdrop-filter: brightness(120%) contrast(110%);
       display: none;
-      z-index: 40;
+      z-index: 30;
     }
 
-    .guidestrip.active {
-      display: block;
-    }
-
-    .guidestrip-controls {
+    .controls {
       position: absolute;
-      top: 180px;
+      top: 120px;
       left: 20px;
-      z-index: 22;
-      color: rgb(129, 173, 255);
+      z-index: 21;
+      color: white;
     }
 
-    .guidestrip-controls label {
+    .controls label {
       font-size: 0.9em;
       font-family: Times;
       text-decoration: underline;
@@ -146,20 +141,20 @@
   </style>
 </head>
 <body>
-  <h1>CYBER GUIDESTRIP</h1>
+  <h1>CYBER PAPERWEIGHT</h1>
 
   <button class="close-btn" id="closeBtn">✕</button>
   <button class="toggle-mode" id="modeToggle">Dark Mode</button>
 
-  <div class="guidestrip-controls">
-    <label>Height
-      <input type="range" id="stripHeight" min="20" max="200" value="50">
+  <div class="controls">
+    <label>Zoom
+      <input type="range" id="zoomRange" min="1" max="5" step="0.1" value="2">
     </label>
-    <label>Opacity
-      <input type="range" id="stripOpacity" min="0.1" max="1" step="0.1" value="0.4">
+    <label>Size
+      <input type="range" id="sizeRange" min="50" max="600" step="10" value="200">
     </label>
-    <label>Color
-      <input type="color" id="stripColor" value="#aad4ff">
+    <label>Distortion
+      <input type="range" id="distortionRange" min="0" max="1" step="0.05" value="0.3">
     </label>
   </div>
 
@@ -168,7 +163,7 @@
   </div>
 
   <div class="pdf-container" id="pdfContainer"></div>
-  <div class="guidestrip" id="guideStrip"></div>
+  <div class="magnifier" id="magnifier"><canvas id="magnifierCanvas"></canvas></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
@@ -178,19 +173,21 @@
     const pdfContainer = document.getElementById('pdfContainer');
     const closeBtn = document.getElementById('closeBtn');
     const modeToggle = document.getElementById('modeToggle');
-    const guideStrip = document.getElementById('guideStrip');
-    const stripHeight = document.getElementById('stripHeight');
-    const stripOpacity = document.getElementById('stripOpacity');
-    const stripColor = document.getElementById('stripColor');
+    const magnifier = document.getElementById('magnifier');
+    const magnifierCanvas = document.getElementById('magnifierCanvas');
+    const zoomRange = document.getElementById('zoomRange');
+    const sizeRange = document.getElementById('sizeRange');
+    const distortionRange = document.getElementById('distortionRange');
+    const magnifierCtx = magnifierCanvas.getContext('2d');
     let darkMode = false;
-    let guideActive = false;
+    let magnifierActive = false;
 
     function resetViewer() {
       pdfContainer.innerHTML = '';
       closeBtn.style.display = 'none';
       dropContainer.style.display = 'block';
-      guideStrip.style.display = 'none';
-      guideActive = false;
+      magnifier.style.display = 'none';
+      magnifierActive = false;
     }
 
     closeBtn.addEventListener('click', resetViewer);
@@ -245,21 +242,68 @@
       fileReader.readAsArrayBuffer(file);
     });
 
-    document.addEventListener('keydown', (e) => {
-      if (e.code === 'Space') {
-        e.preventDefault();
-        guideActive = !guideActive;
-        guideStrip.classList.toggle('active', guideActive);
-      }
+    document.body.addEventListener('click', (e) => {
+      if (e.target.closest('.controls')) return;
+      magnifierActive = !magnifierActive;
+      magnifier.style.display = magnifierActive ? 'block' : 'none';
     });
 
-    document.addEventListener('mousemove', e => {
-      if (!guideActive) return;
-      const height = parseInt(stripHeight.value);
-      guideStrip.style.top = `${e.clientY - height / 2}px`;
-      guideStrip.style.height = `${height}px`;
-      guideStrip.style.background = stripColor.value;
-      guideStrip.style.opacity = stripOpacity.value;
+    document.body.addEventListener('mousemove', e => {
+      if (!magnifierActive) return;
+
+      const zoom = parseFloat(zoomRange.value);
+      const size = parseInt(sizeRange.value);
+      const distortion = parseFloat(distortionRange.value);
+      magnifierCanvas.width = size;
+      magnifierCanvas.height = size;
+      magnifier.style.width = `${size}px`;
+      magnifier.style.height = `${size}px`;
+
+      const targetCanvas = [...pdfContainer.querySelectorAll('canvas')].find(c => {
+        const rect = c.getBoundingClientRect();
+        return e.clientY >= rect.top && e.clientY <= rect.bottom;
+      });
+
+      if (!targetCanvas) return;
+
+      const rect = targetCanvas.getBoundingClientRect();
+      const context = targetCanvas.getContext('2d');
+      const imageData = context.getImageData(0, 0, targetCanvas.width, targetCanvas.height);
+
+      const radius = size / 2;
+      const centerX = e.clientX - rect.left;
+      const centerY = e.clientY - rect.top;
+
+      magnifier.style.left = `${e.pageX}px`;
+      magnifier.style.top = `${e.pageY}px`;
+
+      const dest = magnifierCtx.createImageData(size, size);
+      const destData = dest.data;
+
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const dx = x - radius;
+          const dy = y - radius;
+          const dist = Math.sqrt(dx * dx + dy * dy) / radius;
+          if (dist > 1) continue;
+
+          const factor = zoom * (1 + Math.pow(dist, 2) * distortion);
+
+          const srcX = Math.floor(centerX + dx / factor);
+          const srcY = Math.floor(centerY + dy / factor);
+
+          if (srcX < 0 || srcY < 0 || srcX >= targetCanvas.width || srcY >= targetCanvas.height) continue;
+
+          const srcIndex = (srcY * targetCanvas.width + srcX) * 4;
+          const destIndex = (y * size + x) * 4;
+          destData[destIndex] = imageData.data[srcIndex];
+          destData[destIndex + 1] = imageData.data[srcIndex + 1];
+          destData[destIndex + 2] = imageData.data[srcIndex + 2];
+          destData[destIndex + 3] = 255;
+        }
+      }
+
+      magnifierCtx.putImageData(dest, 0, 0);
     });
   </script>
 </body>
